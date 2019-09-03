@@ -11,6 +11,7 @@ ts = file['ts']
 #print(raw.shape)
 IMUparams_raw = IMUparams['IMUParams']
 #How to retrive data:   raw[which dtyp (ax,ay,az,wz,wx,wy), index of var]
+#print(IMUparams_raw.shape)
 #print(ts.shape) 
 
 w_raw = np.array([raw[4,:],raw[5,:],raw[3,:]]) #reorder for x, y, z
@@ -18,7 +19,7 @@ a_raw = np.array([raw[0,:],raw[1,:],raw[2,:]])
 #print(w_raw.shape)
 
 # Calculate Bias as the average of the first 300 gyro datapoints when the gyro is at rest (assumed)
-bias_w = np.array([w_raw[0,0:300].mean(),w_raw[1,0:300].mean(),w_raw[2,0:300].mean()])
+bias_w = np.array([w_raw[0,0:200].mean(),w_raw[1,0:200].mean(),w_raw[2,0:200].mean()])
 # extract accelerometer bias from IMU params.  b_ax, b_ay, b_az
 bias_a = np.array([IMUparams_raw[1,0],IMUparams_raw[1,1],IMUparams_raw[1,2]])
 # extract accelerometer bias from IMU params.  s_x, s_y, s_z
@@ -42,10 +43,26 @@ w_rad = np.array([w_rad_x,w_rad_y,w_rad_z])
 #print(w_rad.shape)
 
 # Calculate Accelerometer data [ax,ay,az]
-a_x = (a_raw[0,:]+bias_a[0])/scale_a[0]
-a_y = (a_raw[1,:]+bias_a[1])/scale_a[1]
-a_z = (a_raw[2,:]+bias_a[2])/scale_a[2]
-a_scaled = np.array([a_x,a_y,a_z])
+#a_x = (a_raw[0,:]+bias_a[0])/scale_a[0]
+#a_y = (a_raw[1,:]+bias_a[1])/scale_a[1]
+#a_z = (a_raw[2,:]+bias_a[2])/scale_a[2]
+
+# Basic data doesnt make sense.  Try multiplying by scale instead of dividing
+#a_x2 = (a_raw[0,:]+bias_a[0])*scale_a[0]
+#a_y2 = (a_raw[1,:]+bias_a[1])*scale_a[1]
+#a_z2 = (a_raw[2,:]+bias_a[2])*scale_a[2]
+
+# Basic data doesnt make sense.  Try multiplying by bias and adding scale instead
+#a_x3 = (a_raw[0,:]+scale_a[0])/bias_a[0]
+#a_y3 = (a_raw[1,:]+scale_a[1])/bias_a[1]
+#a_z3 = (a_raw[2,:]+scale_a[2])/bias_a[2]
+
+# Basic data doesnt make sense.  Try scaling first
+a_x4 = (a_raw[0,:]*scale_a[0]+bias_a[0])*9.81
+a_y4 = (a_raw[1,:]*scale_a[1]+bias_a[1])*9.81
+a_z4 = (a_raw[2,:]*scale_a[2]+bias_a[2])*9.81
+
+a_scaled = np.array([a_x4,a_y4,a_z4])
 
 #state vector is x: phi theta psi Euler angles (roll,pitch,yaw)
 x_gyro_rad=np.zeros(w_rad.shape)
@@ -58,12 +75,22 @@ for i in range(x_gyro_rad.shape[1]):
 	temp=np.trapz(w_rad[:,:i],axis=1,x=ts[0,:i])
 	#print(temp)
 	x_gyro_rad[:,i] = np.transpose(temp)
-	a_phi = np.arctan(a_y[i]/np.sqrt(a_x[i]**2+a_z[i]**2))
-	a_theta = np.arctan(a_x[i]/np.sqrt(a_y[i]**2+a_z[i]**2))
-	a_psi = np.arctan(np.sqrt(a_x[i]**2+a_y[i]**2)/a_z[i])
-	a_orientation[:,i] = np.array([a_phi,a_theta,a_psi])
+#	a_phi = np.arctan(a_y4[i]/np.sqrt(a_x4[i]*a_x4[i]+a_z[i]*a_z[i]))
+#	a_theta = np.arctan(a_x4[i]/np.sqrt(a_y4[i]**2+a_z4[i]**2))
+#	a_psi = np.arctan(np.sqrt(a_x4[i]**2+a_y4[i]**2)/a_z4[i])
 
+	a_phi2 = np.arctan2(a_y4[i],np.sqrt((a_x4[i]**2)+(a_z4[i]**2)))
+	a_theta2 = np.arctan2(a_x4[i],np.sqrt((a_y4[i]**2)+(a_z4[i]**2)))
+	a_psi2 = np.arctan2(np.sqrt((a_x4[i]**2)+(a_y4[i]**2)),a_z4[i])
+
+
+	a_orientation_temp = np.array([a_phi2,a_theta2,a_psi2])
+	a_orientation[:,i] = a_orientation_temp
+#if i==0:
+#	 a_zero = a_orientation[:,0]
+#a_orientation[:,i] = a_orientation_temp - a_zero
 print('done')	
+
 
 #x_rad = np.trapz(w_rad,axis=1,x=ts)
 
