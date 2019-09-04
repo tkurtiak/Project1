@@ -2,8 +2,8 @@ from scipy import io
 import matplotlib.pyplot as plt
 import numpy as np 
 
-file = io.loadmat("Data/Train/IMU/imuRaw1.mat")
-VICONfile = io.loadmat("Data/Train/Vicon/viconRot1.mat")
+file = io.loadmat("Data/Train/IMU/imuRaw6.mat")
+VICONfile = io.loadmat("Data/Train/Vicon/viconRot6.mat")
 IMUparams = io.loadmat("IMUParams.mat")
 
 raw = file['vals']
@@ -80,7 +80,7 @@ for i in range(x_gyro_rad.shape[1]):
 #	a_psi = np.arctan(np.sqrt(a_x4[i]**2+a_y4[i]**2)/a_z4[i])
 
 	a_phi2 = np.arctan2(a_y4[i],np.sqrt((a_x4[i]**2)+(a_z4[i]**2)))
-	a_theta2 = np.arctan2(a_x4[i],np.sqrt((a_y4[i]**2)+(a_z4[i]**2)))
+	a_theta2 = np.arctan2(-a_x4[i],np.sqrt((a_y4[i]**2)+(a_z4[i]**2)))
 	a_psi2 = np.arctan2(np.sqrt((a_x4[i]**2)+(a_y4[i]**2)),a_z4[i])
 
 
@@ -89,13 +89,17 @@ for i in range(x_gyro_rad.shape[1]):
 #if i==0:
 #	 a_zero = a_orientation[:,0]
 #a_orientation[:,i] = a_orientation_temp - a_zero
-print('done')	
 
 
-#x_rad = np.trapz(w_rad,axis=1,x=ts)
+#Adjust to keep in +-pi range (DONT NEED?)
+# for i in range(x_gyro_rad.shape[1]):
+# 	for j in range(x_gyro_rad.shape[0]):
+# 		if x_gyro_rad[j,i]> np.pi:
+# 			x_gyro_rad[j,i] = x_gyro_rad[1,i]#-2*np.pi
+			
+# 		if x_gyro_rad[j,i]< -np.pi:
+# 			x_gyro_rad[j,i] = x_gyro_rad[1,i]#+2*np.pi
 
-
-#print(x_gyro_rad)
 
 
 
@@ -130,7 +134,7 @@ for i in range(V_rot_m.shape[2]):
 
 #print(V_x_rad)
 
-
+print('done')
 
 
 
