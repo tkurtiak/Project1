@@ -158,7 +158,7 @@ print('done')
 print('starting filter')
 ######################################################################
 #####TUNE THIS############
-Beta=.9
+Beta=0.1
 #####################################################################
 
 Magwick_x= np.zeros([3,x_gyro_rad.shape[1]])
@@ -180,16 +180,28 @@ for i in range(x_gyro_rad.shape[1]-1):
 	#GYRO BRANCH
 	#build the right side from slide 17 lecture 2b
 	#tempquat = tf.transformations.quaternion_from_euler(x_gyro_rad[0,i+1],x_gyro_rad[1,i+1],x_gyro_rad[2,i+1],'rzyx')
-	tempquat = [ 0, x_gyro_rad[0,i+1],x_gyro_rad[1,i+1],x_gyro_rad[2,i+1]]
+	
+	#tempquat = [ 0, x_gyro_rad[0,i+1],x_gyro_rad[1,i+1],x_gyro_rad[2,i+1]]
+	tempquat = [ 0, w_rad[0,i+1],w_rad[1,i+1],w_rad[2,i+1]]
+	
 	#tempquat=Quaternion(tempquat_0)
 	#make q_est_t into actual quaternion for multiply
 	#temp= Quaternion(q_est_t)
 	#temp = np.array[q_est_t[0],q_est_t[1],q_est_t[2],q_est_t[3]]
 	temp = q_est_t
-	orien_incr_quat= .5*tf.transformations.quaternion_multiply(temp,tempquat)
+	#orien_incr_quat= tf.transformations.quaternion_multiply(.5*temp,tempquat)
+	a = temp
+	b = tempquat
+	orien_incr_quat = [0,0,0,0]
+	orien_incr_quat[0] = .5*(a[0]*b[0]-a[1]*b[1]-a[2]*b[2]-a[3]*b[3])
+	orien_incr_quat[1] = .5*(a[0]*b[1]+a[1]*b[0]+a[2]*b[3]-a[3]*b[2] )
+	orien_incr_quat[2] = .5*(a[0]*b[2]-a[1]*b[3]+a[2]*b[0]+a[3]*b[1] )
+	orien_incr_quat[3] = .5*(a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0] )
 	#retrieve quaternion and convert to numpy array
 	#orientation_inc= np.transpose(np.array([orien_incr_quat.real, orien_incr_quat.vector[0], orien_incr_quat.vector[1], orien_incr_quat.vector[2]]))
-	orientation_inc= np.transpose(np.array([orien_incr_quat[0],orien_incr_quat[1],orien_incr_quat[2],orien_incr_quat[3]]))
+	
+	#orientation_inc= np.transpose(np.array([orien_incr_quat[0],orien_incr_quat[1],orien_incr_quat[2],orien_incr_quat[3]]))
+	orientation_inc= np.array([orien_incr_quat[0],orien_incr_quat[1],orien_incr_quat[2],orien_incr_quat[3]])
 
 	#ACCEL BRANCH
 	#equation is f(q_est,t, g, a_t+1) so
@@ -197,12 +209,6 @@ for i in range(x_gyro_rad.shape[1]-1):
 	#del f should be function of q_t not q_t+1 
 
 	#for simplicity of eq writing:
-	#q1=q_est_t[0]
-	#q2=q_est_t[1]
-	#q3=q_est_t[2]
-	#q4=q_est_t[3]
-	
-	# quaternion convention of tf is [qx,qy,qz,w]
 	q1=q_est_t[0]
 	q2=q_est_t[1]
 	q3=q_est_t[2]
@@ -229,28 +235,34 @@ for i in range(x_gyro_rad.shape[1]-1):
 	ii=i+1
 	#temp=np.trapz(qdot_est[:,:ii],axis=1,x=ts[0,:ii])
 	dt= ts[0,ii]-ts[0,i]
-	temp= q_est_t + dt*qdot_est[:,i+1]
+	temp2= q_est_t + dt*qdot_est[:,i+1]
 	#print('integrating:')
 	#print(qdot_est[:,:ii])
 	#print(ts[0,:ii])
 	#print(temp)
 	#normalize before saving
-	if np.count_nonzero(temp)==0:
-		temp[0]=1
+	if np.count_nonzero(temp2)==0:
+		temp2[0]=1
 		#print('got into if')
-	temp=temp/(np.linalg.norm(temp))
+	temp2=temp2/(np.linalg.norm(temp2))
 	
-	est_quat[:,i+1] = np.transpose(temp)
+	est_quat[:,i+1] = np.transpose(temp2)
+	#est_quat[:,i+1] = temp2
 
 	#r_rotation=Rotation.from_quat(temp)
-	EulerOut = tf.transformations.euler_from_quaternion(temp,'szyx')
+	EulerOut = tf.transformations.euler_from_quaternion(temp2,'szyx')
+
 	#r_rotation.as_euler('zyx')
 	#Magwick_x[0,i+1]=r_rotation.as_euler('zyx')[2] #phi
 	#Magwick_x[1,i+1]=r_rotation.as_euler('zyx')[1] #theta
 	#Magwick_x[2,i+1]=r_rotation.as_euler('zyx')[0] #psi
-	Magwick_x[2,i+1]=EulerOut[2]-3.14159 #
-	Magwick_x[1,i+1]=EulerOut[1] #
-	Magwick_x[0,i+1]=-EulerOut[0] #
+	
+	#Magwick_x[2,i+1]=EulerOut[2] #phi
+	Magwick_x[2,i+1]= -np.arctan2(2*temp2[1]*temp2[2]-2*temp2[0]*temp2[3],2*temp2[0]**2+2*temp2[1]**2-1) 
+	
+	Magwick_x[1,i+1]= EulerOut[1] #theta
+#	Magwick_x[0,i+1]=-EulerOut[0] #psi
+	Magwick_x[0,i+1]=-np.arctan2(2*temp2[2]*temp2[3]-2*temp2[0]*temp2[1],2*temp2[0]**2+2*temp2[3]**2-1)
 
 
 
@@ -317,4 +329,4 @@ ax4.plot(np.transpose(ts),qdot_est[3,:],label = 'ViconPsi')
 plt.show()
 
 
-raw_input('Press Enter to exit')
+#raw_input('Press Enter to exit')
