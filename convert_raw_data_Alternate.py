@@ -7,9 +7,10 @@ import tf
 #from scipy.spatial.transform import Rotation
 #pip install pyquaternion
 
-
-file = io.loadmat("Data/Train/IMU/imuRaw1.mat")
-VICONfile = io.loadmat("Data/Train/Vicon/viconRot1.mat")
+filename = "imuRaw1"
+filename2 = "viconRot1"
+file = io.loadmat("Data/Train/IMU/"+filename+".mat")
+VICONfile = io.loadmat("Data/Train/Vicon/"+filename2+".mat")
 IMUparams = io.loadmat("IMUParams.mat")
 
 raw = file['vals']
@@ -271,62 +272,80 @@ for i in range(x_gyro_rad.shape[1]-1):
 print('plotting')
 #print(np.transpose(V_ts[:]).shape)
 #print(V_x_rad[0,:].shape)
+plot_time = np.zeros([1,x_gyro_rad.shape[1]])
+plot_time_V = np.zeros([1,V_x_rad.shape[1]])
+for i in range(x_gyro_rad.shape[1]):
+	plot_time[0,i] = (ts[0,i]-ts[0,0])/1
+for i in range(V_x_rad.shape[1]):	
+	plot_time_V[0,i] = (V_ts[0,i]-V_ts[0,0])/1
 
-fig = plt.figure()
-ax1 = fig.add_subplot(3,1,1,title = 'Psi')
+plot_time = np.transpose(plot_time)
+plot_time_V = np.transpose(plot_time_V)
+
+fig = plt.figure(figsize=(12,10),dpi=80,facecolor = 'w', edgecolor = 'k')
+ax1 = fig.add_subplot(3,1,1,title = 'Yaw, Psi')
 #ax1.title('Psi')
-ax1.plot(np.transpose(V_ts),V_x_rad[0,:],label = 'ViconPsi')
+ax1.plot(plot_time_V,V_x_rad[0,:],label = 'Vicon')
 plt.hold(True)
-ax1.plot(np.transpose(ts),x_gyro_rad[2,:],label = 'GyroPsi')
-ax1.plot(np.transpose(ts),a_orientation[2,:],label = 'AccelPsi')
-ax1.plot(np.transpose(ts),Magwick_x[2,:],label = 'MagwickPsi')
-plt.legend()
+ax1.plot(plot_time,x_gyro_rad[2,:],label = 'Gyro')
+ax1.plot(plot_time,a_orientation[2,:],label = 'Accel')
+ax1.plot(plot_time,Magwick_x[2,:],label = 'Magwick')
+#plt.xlabel('time, s')
+plt.ylabel('angle, Radians')
+plt.legend(loc = 'lower right')
 
-ax2 = fig.add_subplot(3,1,2,title = 'Theta')
-ax2.plot(np.transpose(V_ts),V_x_rad[1,:],label = 'ViconTheta')
+ax2 = fig.add_subplot(3,1,2,title = 'Pitch, Theta')
+ax2.plot(plot_time_V,V_x_rad[1,:],label = 'Vicon')
 plt.hold(True)
-ax2.plot(np.transpose(ts),x_gyro_rad[1,:],label = 'GyroTheta')
-ax2.plot(np.transpose(ts),a_orientation[1,:],label = 'AccelTheta')
-ax2.plot(np.transpose(ts),Magwick_x[1,:],label = 'MagwickTheta')
-plt.legend()
+ax2.plot(plot_time,x_gyro_rad[1,:],label = 'Gyro')
+ax2.plot(plot_time,a_orientation[1,:],label = 'Accel')
+ax2.plot(plot_time,Magwick_x[1,:],label = 'Magwick')
+#plt.xlabel('time, s')
+plt.ylabel('angle, Radians')
+plt.legend(loc = 'lower right')
 
-ax3 = fig.add_subplot(3,1,3,title = 'Phi')
-ax3.plot(np.transpose(V_ts),V_x_rad[2,:],label = 'ViconPhi')
+ax3 = fig.add_subplot(3,1,3,title = 'Roll, Phi')
+ax3.plot(plot_time_V,V_x_rad[2,:],label = 'Vicon')
 plt.hold(True)
-ax3.plot(np.transpose(ts),x_gyro_rad[0,:],label = 'GyroPhi')
-ax3.plot(np.transpose(ts),a_orientation[0,:],label = 'AccelPhi')
-ax3.plot(np.transpose(ts),Magwick_x[0,:],label = 'MagwickPhi')
-plt.legend()
-#plt.show()
+ax3.plot(plot_time,x_gyro_rad[0,:],label = 'Gyro')
+ax3.plot(plot_time,a_orientation[0,:],label = 'Accel')
+ax3.plot(plot_time,Magwick_x[0,:],label = 'Magwick')
+plt.xlabel('time, s')
+plt.ylabel('angle, Radians')
+plt.legend(loc = 'lower right')
 
+#mng = plt.get_current_fig_manager()
+#mng.window.state('zoomed')
 
-fig2 = plt.figure()
-ax1 = fig2.add_subplot(4,1,1,title = 'q0')
-ax1.plot(np.transpose(ts),est_quat[0,:],label = 'ViconPsi')
-
-ax2 = fig2.add_subplot(4,1,2,title = 'q1')
-ax2.plot(np.transpose(ts),est_quat[1,:],label = 'ViconPsi')
-
-ax3 = fig2.add_subplot(4,1,3,title = 'q2')
-ax3.plot(np.transpose(ts),est_quat[2,:],label = 'ViconPsi')
-
-ax4 = fig2.add_subplot(4,1,4,title = 'q3')
-ax4.plot(np.transpose(ts),est_quat[3,:],label = 'ViconPsi')
-#plt.show()
-
-fig3 = plt.figure()
-ax1 = fig3.add_subplot(4,1,1,title = 'qdot0')
-ax1.plot(np.transpose(ts),qdot_est[0,:],label = 'ViconPsi')
-
-ax2 = fig3.add_subplot(4,1,2,title = 'qdot1')
-ax2.plot(np.transpose(ts),qdot_est[1,:],label = 'ViconPsi')
-
-ax3 = fig3.add_subplot(4,1,3,title = 'qdot2')
-ax3.plot(np.transpose(ts),qdot_est[2,:],label = 'ViconPsi')
-
-ax4 = fig3.add_subplot(4,1,4,title = 'qdot3')
-ax4.plot(np.transpose(ts),qdot_est[3,:],label = 'ViconPsi')
+plt.savefig(filename + ".png")
 plt.show()
+#fig2 = plt.figure()
+#ax1 = fig2.add_subplot(4,1,1,title = 'q0')
+#ax1.plot(np.transpose(ts),est_quat[0,:],label = 'ViconPsi')
+
+#ax2 = fig2.add_subplot(4,1,2,title = 'q1')
+#ax2.plot(np.transpose(ts),est_quat[1,:],label = 'ViconPsi')
+
+#ax3 = fig2.add_subplot(4,1,3,title = 'q2')
+#ax3.plot(np.transpose(ts),est_quat[2,:],label = 'ViconPsi')
+
+#ax4 = fig2.add_subplot(4,1,4,title = 'q3')
+#ax4.plot(np.transpose(ts),est_quat[3,:],label = 'ViconPsi')
+#plt.show()
+
+#fig3 = plt.figure()
+#ax1 = fig3.add_subplot(4,1,1,title = 'qdot0')
+#ax1.plot(np.transpose(ts),qdot_est[0,:],label = 'ViconPsi')
+
+#ax2 = fig3.add_subplot(4,1,2,title = 'qdot1')
+#ax2.plot(np.transpose(ts),qdot_est[1,:],label = 'ViconPsi')
+
+#ax3 = fig3.add_subplot(4,1,3,title = 'qdot2')
+#ax3.plot(np.transpose(ts),qdot_est[2,:],label = 'ViconPsi')
+
+#ax4 = fig3.add_subplot(4,1,4,title = 'qdot3')
+#ax4.plot(np.transpose(ts),qdot_est[3,:],label = 'ViconPsi')
+#plt.show()
 
 
 #raw_input('Press Enter to exit')
