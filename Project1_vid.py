@@ -9,8 +9,8 @@ from rotplot import rotplot
 #import tf
 
 #Change file name here to view various data sets
-filename = "imuRaw6"
-filename2 = "viconRot6"
+filename = "imuRaw5"
+filename2 = "viconRot5"
 
 #load data
 print('loading data')
@@ -371,7 +371,7 @@ ax4.title.set_text('Vicon')
 print('writing file...')
 with writer.saving(Fig_animate, filename +"_vid"+ ".mp4", ViconTs.shape[0]):
 	for i in range(ViconTs.shape[0]):
-		print(i/ViconTs.shape[0])
+		print(str(i) +'of' + str(ViconTs.shape[0]))
 		ax1.clear()
 		ax2.clear()
 		ax3.clear()
