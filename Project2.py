@@ -15,7 +15,7 @@ def quat_mult(a,b):
 
 
 #Change file name here to view various data sets
-filename = "imuRaw10"
+filename = "imuRaw6"
 filename2 = "viconRot6"
 
 #load data
@@ -212,37 +212,33 @@ def ProcessModel(State0,dt):
 
 
 
-# Measurement Model for Gyroscope
-def MeasurementModel_Gyro(State0,v):
+# Measurement Model 
+def MeasurementModel(State0):
 	# State is a 7x1 vector of position quaternions and angular velocity
 	# State = [q0,q1,q2,q3,wx,wy,wz] 
-	# v is 7x1 noise vector
+	# v is 7x1 noise vector NOT USED
 	Gyro1 = np.zeros(3)
-	Gyro1 = np.array(State0[4:7])+np.array(v[4:7])
+	Gyro1 = np.array(State0[4:7])#+np.array(v[4:7])
 
-	return Gyro1
-
-
-
-## NOT FINISHED
-	# Measurement Model for Accelerometer
-def MeasurementModel_Accel(State0,v):
-	# State is a 7x1 vector of position quaternions and angular velocity
-	# State = [q0,q1,q2,q3,wx,wy,wz] 
-	# v is 7x1 noise vector
 	Accel1 = np.zeros(4)
 	q_k = np.array(State0[0:4])
 	# Define g as gravity down, ie a_z = -9.81 m/s/s
 	g = np.array([0,0,0,-9.81])
 	
-	temp = quat_mult(q_k,g)
+	# inverse q_k is the negative of the last 3 components
 	qi = np.array([q_k[0],-q_k[1],-q_k[2],-q_k[3]])
-	gprime = quat_mult(temp,qi) 
-	# Reccomend use tf for quaternion multiply
 
-	Accel1 = gprime+v[0:4]
+	temp = quat_mult(qi,g)
+	
+	gprime = quat_mult(temp,q_k) 
+	
 
-	return Accel1
+	Accel1 = gprime[1:4]#+v[0:4]
+	#put it all together
+	Z = np.concatenate((Accel1,Gyro1),axis=None)
+	return Z
+
+
 
 
 
@@ -299,7 +295,8 @@ for i in range(200):
 x_prev=np.array([1.,0.,0.,0.,0.,0.,0.])
 #its covariance P_k-1
 
-P_prev=COV_statevectors(initial_states,x_prev)
+P_prev=COV_statevectors(initial_states,x_prev) # Add process noise here. 
+# I think process noise Q is just initialized arbitrarily and updated as we go
 
 
 
@@ -334,5 +331,28 @@ x_prior=AVG_statevectors(Y)
 P_k_prior=COV_statevectors(Y,x_prior)
 #print(x_bar)
 
+# Calculate Wprime
+temp = np.zeros(Y.shape)
+rotVec = np.zeros([3,Y.shape[1]])
+for i in range(Y.shape[1]):
+	temp[:,i] = Y[:,i]-x_prior
+	rotVec[:,i] = quat_mult(temp[0:4,i],np.array(temp[0,i],-temp[1,i],-temp[2,i],-temp[3,i]))
+	Wprime[:,i] = np.concatenate((rotVec[:,i], temp[4:7,i]),axis=None)
+print(Wprime)
+
+# INSERT STEP 6 HERE, Calculate P_k
 #cov_m=COV_statevectors(state_vectorZ,x_bar)
 #print(cov_m)
+
+
+# Step 7, Calculate Expected Sensor output Z at predicted states Y
+for i in range(Y.shape[1]):
+	Z[:,i] = MeasurementModel(Y[:,i])
+z_bar=AVG_statevectors(Z)
+
+###### REPLACE 555 with loop index in future
+SensorState = np.concatenate((a_scaled[:,555],x_gyro_rad[:,555]),axis=None)
+innovation = SensorState - z_bar
+
+# not sure aout this next step
+P_zz=COV_statevectors(Z,x_prior)
