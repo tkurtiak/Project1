@@ -154,18 +154,20 @@ def AVG_statevectors(state_vectors,mean_quat=np.array([.1,.1,.1,.1])):
 
 	return xbar
 
-def COV_statevectors(state_vectors,xbar=np.array([0.,0.,0.,0.,0.,0.,0.])):
+def COV_statevectors(state_vectors,xbar):
 	#so you got a bunch of 7d state vectors, and their average
 	#give back a 7x7 covariance matrix, itll always be 7x7 for this input
-
+	
+	h = state_vectors.shape[0]
+	#xbar=np.zeros(h)
 	try:
 		n=float(state_vectors.shape[1])
 	except:
 		n=1.
 		
 
-	temp=np.zeros((7,1))
-	cov_matrix=np.zeros((7,7))
+	temp=np.zeros((h,1))
+	cov_matrix=np.zeros((h,h))
 	for i in range(int(n)):
 
 		if(n==1):
@@ -366,5 +368,11 @@ z_bar=AVG_statevectors(Z)
 SensorState = np.concatenate((a_scaled[:,555],x_gyro_rad[:,555]),axis=None)
 innovation = SensorState - z_bar
 
-# not sure aout this next step
-#P_zz=COV_statevectors(Z,x_prior)
+# Calculate measurement uncertainty covariance
+P_zz=COV_statevectors(Z,SensorState)
+
+
+#Step 9, Innovation covariance
+# Pvv = R+Pzz  ### Where R is user defined???
+
+# Step 10, Cross Correlation Covariance of Wprime and Z.  Might need a new covariance func for this
