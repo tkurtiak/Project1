@@ -78,69 +78,77 @@ for i in range(x_gyro_rad.shape[1]-1):
 
 
 
-def AVG_statevectors(state_vectors,mean_quat=np.array([1.,0.,0.,0.])):
+def AVG_statevectors(state_vectors,mean_quat=np.array([.1,.1,.1,.1])):
 	#make state vectors 7 rows by n column vectors, every column is 7d [quat, p,q,r] state vector
 	n=float(state_vectors.shape[1])
+	h = int(state_vectors.shape[0])
 	#normalize the quaternions (just in case)
 	for i in range(int(n)):
 		state_vectors[0:4,i]=state_vectors[0:4,i]*(1/np.linalg.norm(state_vectors[0:4,i]))
 
-	
-	mean_inv=np.array([1.,0.,0.,0.])
-	error_matrix=np.zeros((4,int(n)))
-	error_val=100.0
-	#in case of infinite loop debug with counter
-	counter=0
-	while error_val>0.001:
+	# Perform quaternion mean process if we have a quaternion vector (ie dimention of state is 7)
+	if h==7:
+		mean_inv=np.array([1.,0.,0.,0.])
+		error_matrix=np.zeros((4,int(n)))
+		error_val=100.0
+		#in case of infinite loop debug with counter
+		counter=0
+		while error_val>0.01:
 
-		#this for debugging infinite loop
-		counter=counter+1
-		#print('counter is ' + str(counter) + ' error val ' + str(error_val))
+			#this for debugging infinite loop
+			counter=counter+1
+			#print('counter is ' + str(counter) + ' error val ' + str(error_val))
 
-		if(counter>10000):
-			print('counter is ' + str(counter) + ' error val ' + str(error_val) + '.   BREAKING')
-			break
+			if(counter>10000):
+				print('counter is ' + str(counter) + ' error val ' + str(error_val) + '.   BREAKING')
+				break
 
-		#inverse the mean
-		mean_inv[0]=mean_quat[0]
-		mean_inv[1:]=-1*mean_quat[1:]
+			#inverse the mean
+			mean_inv[0]=mean_quat[0]
+			mean_inv[1:]=-1*mean_quat[1:]
 
-		#initialize error_vector
-		error_vector_mean=np.array([0.,0.,0.])
+			#initialize error_vector
+			error_vector_mean=np.array([0.,0.,0.])
 
+			for i in range(int(n)):
+				#calc error quaternions
+
+				error_matrix[:,i]= quat_mult(state_vectors[0:4,i],mean_inv)
+
+				#normalize (just in case)
+				error_matrix[:,i]= error_matrix[:,i]*(1/np.linalg.norm(error_matrix[:,i]))
+
+				#you have quaternion, now make into error vector subscript i
+				theta= 2*np.arccos(error_matrix[0,i])
+				error_vector= error_matrix[1:,i]*(np.sin(theta/2))
+				#add it to the mean
+				error_vector_mean= error_vector_mean + (error_vector/n)
+
+			#heres your convergence value, when error vector is 0,0,0 you're good, this should be close enough
+			error_val=np.linalg.norm(error_vector_mean)
+
+			#okay now convert your mean error vector back into a quaternion to update the mean quaternion
+			error_quat=np.array([np.cos(error_val/2), error_vector_mean[0]*np.sin(error_val/2),error_vector_mean[1]*np.sin(error_val/2),error_vector_mean[2]*np.sin(error_val/2)])
+			#normalize for those floating point errors and stuff
+			error_quat= error_quat*(1/np.linalg.norm(error_quat))
+
+			#update your mean quaternion
+			mean_quat=quat_mult(error_quat,mean_quat)
+			#normalize that too
+			mean_quat=mean_quat*(1/np.linalg.norm(mean_quat))
+	else: 
+		mean_quat = np.array([0,0,0])
 		for i in range(int(n)):
-			#calc error quaternions
+			mean_quat=mean_quat + state_vectors[0:(h-3),i]*(1/n)
 
-			error_matrix[:,i]= quat_mult(state_vectors[0:4,i],mean_inv)
 
-			#normalize (just in case)
-			error_matrix[:,i]= error_matrix[:,i]*(1/np.linalg.norm(error_matrix[:,i]))
-
-			#you have quaternion, now make into error vector subscript i
-			theta= 2*np.arccos(error_matrix[0,i])
-			error_vector= error_matrix[1:,i]/(np.sin(theta/2))
-			#add it to the mean
-			error_vector_mean= error_vector_mean + (error_vector/n)
-
-		#heres your convergence value, when error vector is 0,0,0 you're good, this should be close enough
-		error_val=np.linalg.norm(error_vector_mean)
-
-		#okay now convert your mean error vector back into a quaternion to update the mean quaternion
-		error_quat=np.array([np.cos(error_val/2), error_vector_mean[0]*np.sin(error_val/2),error_vector_mean[1]*np.sin(error_val/2),error_vector_mean[2]*np.sin(error_val/2)])
-		#normalize for those floating point errors and stuff
-		error_quat= error_quat*(1/np.linalg.norm(error_quat))
-
-		#update your mean quaternion
-		mean_quat=quat_mult(error_quat,mean_quat)
-		#normalize that too
-		mean_quat=mean_quat*(1/np.linalg.norm(mean_quat))
 	#holy hell, finally have mean quat
 	#alright finish up the mean with regular averaging
 
 	#initialize the mean rates and average them up
 	mean_rates=np.array([0.,0.,0.])	
 	for i in range(int(n)):
-		mean_rates=mean_rates + state_vectors[4:,i]*(1/n)
+		mean_rates=mean_rates + state_vectors[(h-3):,i]*(1/n)
 	#put it all together
 	xbar=np.concatenate((mean_quat, mean_rates))
 
@@ -334,9 +342,12 @@ P_k_prior=COV_statevectors(Y,x_prior)
 # Calculate Wprime
 temp = np.zeros(Y.shape)
 rotVec = np.zeros([3,Y.shape[1]])
+Wprime = np.zeros([6,Y.shape[1]])
 for i in range(Y.shape[1]):
 	temp[:,i] = Y[:,i]-x_prior
-	rotVec[:,i] = quat_mult(temp[0:4,i],np.array(temp[0,i],-temp[1,i],-temp[2,i],-temp[3,i]))
+	temp2 = quat_mult(temp[0:4,i],np.array([temp[0,i],-temp[1,i],-temp[2,i],-temp[3,i]]))
+	# Remove quaternion magnitude q0 to get only the rotation vector.  I think this is right...
+	rotVec[:,i] =temp2[0:3]
 	Wprime[:,i] = np.concatenate((rotVec[:,i], temp[4:7,i]),axis=None)
 print(Wprime)
 
@@ -346,6 +357,7 @@ print(Wprime)
 
 
 # Step 7, Calculate Expected Sensor output Z at predicted states Y
+Z = np.zeros([6,Y.shape[1]])
 for i in range(Y.shape[1]):
 	Z[:,i] = MeasurementModel(Y[:,i])
 z_bar=AVG_statevectors(Z)
@@ -355,4 +367,4 @@ SensorState = np.concatenate((a_scaled[:,555],x_gyro_rad[:,555]),axis=None)
 innovation = SensorState - z_bar
 
 # not sure aout this next step
-P_zz=COV_statevectors(Z,x_prior)
+#P_zz=COV_statevectors(Z,x_prior)
