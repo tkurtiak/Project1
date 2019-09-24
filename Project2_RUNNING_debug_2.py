@@ -12,7 +12,9 @@ def quat_mult(a,b):
 	c[3] = (a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0] )
 	return c
 
-
+def verify_quat(A,strrr):
+	if np.abs(np.linalg.norm(A))-1 > .001:
+		print(strrr + 'has mag: ' + str(np.linalg.norm(A)))
 
 #Change file name here to view various data sets
 filename = "imuRaw1"
@@ -136,6 +138,7 @@ def AVG_statevectors(state_vectors,mean_quat=np.array([1.,0.,0.,0.])):
 	error_val=100.0
 	#in case of infinite loop debug with counter
 	counter=0
+	last_error_vector_mean=np.array([0.,0.,0.])
 	while error_val>0.01:
 
 		#this for debugging infinite loop
@@ -165,12 +168,14 @@ def AVG_statevectors(state_vectors,mean_quat=np.array([1.,0.,0.,0.])):
 			error_matrix[:,i]= quat_mult(state_vectors[:4,i],mean_inv)
 
 			#normalize (just in case)
+			#verify_quat(error_matrix[:,i],'Error_sub_quat')
+
 			error_matrix[:,i]= error_matrix[:,i]*(1/np.linalg.norm(error_matrix[:,i]))
 
 			#you have quaternion, now make into error vector subscript i
 			theta= 2*np.arccos(error_matrix[0,i])
 
-			if (np.abs(theta)<0.00001):
+			if (np.abs(theta)>0.00001):
 				error_vector= error_matrix[1:,i]/(np.sin(theta/2))
 			else:
 				error_vector= np.array([0.,0.,0.])#error_matrix[1:,i]
@@ -180,6 +185,12 @@ def AVG_statevectors(state_vectors,mean_quat=np.array([1.,0.,0.,0.])):
 			error_vector_mean= error_vector_mean + (error_vector/n)
 		#print(error_vector_mean)
 		#heres your convergence value, when error vector is 0,0,0 you're good, this should be close enough
+		
+		#relaxation factor:
+		error_vector_mean= .96*last_error_vector_mean+ .04*error_vector_mean
+
+		last_error_vector_mean=error_vector_mean
+
 		error_val=np.linalg.norm(error_vector_mean)
 		#print(error_matrix)
 
@@ -187,11 +198,13 @@ def AVG_statevectors(state_vectors,mean_quat=np.array([1.,0.,0.,0.])):
 		#okay now convert your mean error vector back into a quaternion to update the mean quaternion
 		error_quat=np.array([np.cos(error_val/2), error_vector_mean[0]*np.sin(error_val/2),error_vector_mean[1]*np.sin(error_val/2),error_vector_mean[2]*np.sin(error_val/2)])
 		#normalize for those floating point errors and stuff
+		#verify_quat(error_quat,'Error_full_quat')
 		error_quat= error_quat*(1/np.linalg.norm(error_quat))
 
 		#update your mean quaternion
 		mean_quat=quat_mult(error_quat,mean_quat)
 		#normalize that too
+		#verify_quat(mean_quat,'mean_quat')
 		mean_quat=mean_quat*(1/np.linalg.norm(mean_quat))
 	#holy hell, finally have mean quat
 	#alright finish up the mean with regular averaging
@@ -242,6 +255,7 @@ def COV_7d(state_vectors,xbar):#=np.array([1.,0.,0.,0.,0.,0.,0.])):
 	for i in range(int(n)):
 		#so we need to grab this quaternion shit and find the error quaternions (subtract out the mean quaternion)
 		e_quat=quat_mult(state_vectors[:4,i],np.array([xbar[0],-xbar[1],-xbar[2],-xbar[3]]))
+		#verify_quat(e_quat,'E_quat COV_7d')
 		#okay lets put this bitch ass error quaternion into a rotation vector thingy thang
 		theta= 2*np.arccos(e_quat[0]) #angle
 		if (np.abs(np.abs(e_quat[0])-1)>0.01):
@@ -284,13 +298,13 @@ def ProcessModel(State0,dt):
 	da = dt*mag
 	# Calculate rotation axis for constant angular rotation
 
-	if mag != 0:
-		de = w_k/np.linalg.norm(w_k)
+	if np.abs(mag) > 0.0001:
+		de = w_k/mag
 	else:
-		de=w_k
+		de= np.array([0.,0.,0.])
 	# Calculate change in quaternions as a result of rotation
 	dq = np.array([np.cos(da/2),de[0]*np.sin(da/2),de[1]*np.sin(da/2),de[2]*np.sin(da/2)])
-
+	#verify_quat(dq,'dq Processmodel')
 
 	# Noise Calculations
 	#w_q = np.array(w_k[0:3])
@@ -300,7 +314,7 @@ def ProcessModel(State0,dt):
 	# Assemble new state vector
 	#temp = quat_mult(q_k,q_w)
 	State1[0:4] = quat_mult(q_k,dq)
-	
+	#verify_quat(State1[0:4],'Y_quat')
 	return State1
 
 
@@ -343,19 +357,24 @@ def MeasurementModel(State0):
 
 #TUNING PARAM
 #R=np.zeros((6,6)) #Measurement uncertainty covariance: idk what else to set this to rn
-Ra = 0.71 #accelerometer observation model noise
-Rg = 0.11#.04 # Gyro observation model noise
+Ra = 5. #accelerometer observation model noise
+Rg = 0.05#.04 # Gyro observation model noise <
 #^^ This parameter seems to play a big role in changing output values
 R = np.diag(np.concatenate([Ra*np.ones([1,3]),Rg*np.ones([1,3])],axis=None))
 
 #Q=np.zeros((6,6)) #ProcessModel uncertainty covariance: idk what else to set this to rn
-Qa = 102.1#.5#100#.001#1   # Process model accel noise
-Qg = 00.3   # Process model gyro noise
+Qa = .0001#.5#100#.001#1   # Process model accel noise < 
+Qg = 0.01   # Process model gyro noise < 
 Q = np.diag(np.concatenate([Qa*np.ones([1,3]),Qg*np.ones([1,3])],axis=None))
 
 
 #STABLE params: Ra Rg Qa Qg 20.1 3.01 100.1 0.3
 #1.1 3.01 100.1 .03
+#.71 .11 102.1 .3
+#Qa = .001 gave no movement
+#.71 .11 .0064 .91 Was stable in sort of moved
+
+#.1 .01 .018 .01
 
 
 #Here are some states from just pure gyro data and their covariance
@@ -387,7 +406,8 @@ Xs_filter[:,0]=x_prev
 
 for I_time in range(ts.shape[1]-1):  #range(10):    range(3): #
 	# print('main loop I: ')
-	# print(I_time)
+	#print(I_time)
+	print(str(I_time)+ ' : '+ str((100*I_time)/ts.shape[1]) + '%')
 
 	
 	#Cholesky square root
@@ -401,7 +421,7 @@ for I_time in range(ts.shape[1]-1):  #range(10):    range(3): #
 	# print(np.matmul(np.transpose(S),S))
 
 	#take the columns of S to eat up W
-	W= np.concatenate((S*(np.sqrt(6)),S*(-1*np.sqrt(6))),axis=1) 
+	W= np.concatenate((S*(np.sqrt(1*6)),S*(-1*np.sqrt(1*6))),axis=1) 
 	#print('W:')
 	#print(W)
 
@@ -411,12 +431,14 @@ for I_time in range(ts.shape[1]-1):  #range(10):    range(3): #
 	for i in range(W.shape[1]):
 		temp_rot_v=W[:3,i] #first three are the rotation angles, second 3 are the rates so...we grab the angles to make a quaternion transform
 		a_w=np.linalg.norm(W[:4,i])#angle
-		if a_w != 0:
+		if np.abs(a_w) > 0.001:
 			e_w=W[:3,i]/a_w#rot vecotor
 		else:
-			e_w=W[:3,i]
+			e_w=np.array([0.,0.,0.]) #W[:3,i]
 		q_w=np.array([np.cos(a_w/2),e_w[0]*np.sin(a_w/2),e_w[1]*np.sin(a_w/2),e_w[2]*np.sin(a_w/2)])#convert to quaternion
-		X[:4,i]= quat_mult(x_prev[:4],q_w/np.linalg.norm(q_w))#shove it in there
+		#verify_quat(q_w,'q_w in sigma make')
+		X[:4,i]= quat_mult(x_prev[:4],q_w)#shove it in there
+		#verify_quat(X[:4,i],'X[:4,i] in sigma make')
 		X[:4,i]=X[:4,i]/np.linalg.norm(X[:4,i])#just in fucking case yo
 		X[4:,i]= x_prev[4:] + W[3:,i]#gg2ez with the rotation rates
 
@@ -433,20 +455,25 @@ for I_time in range(ts.shape[1]-1):  #range(10):    range(3): #
 		Y[:,i]= ProcessModel(X[:,i],dt)
 
 	#Now with Y we can pull out x_kminus, Wiprime,and Pkminus which is step 4,5,6
-	x_prior=AVG_statevectors(Y)
+	x_prior=AVG_statevectors(Y,x_prev[:4]) #use the mean of X as the starting point duh
 	P_k_prior,Wprime=COV_7d(Y,x_prior)
 
 
-	#print(X)
-	#print('upX dwn Y')
-	#print(Y)
-	if np.mod(I_time,500)==1:
-		print(I_time)
-		#print(Y)
-		print(P_prev)
-		#print(Y)
-		#print(x_prior)
-		#print(Wprime)
+	
+	# if np.mod(I_time,500)==1:
+	# 	print(I_time)
+	# 	print(Y)
+	# 	#print(P_prev)
+	# 	#print(Y)
+	# 	print('Avg of above')
+	# 	print(x_prior)
+	# 	print('error')
+	# 	print(Wprime)
+	# 	# print('up is P_prev')
+	# 	# print(X)
+	# 	# print('upX dwn Y')
+	# 	# print(Y)
+	# 	# print(dt)
 
 
 
@@ -488,6 +515,7 @@ for I_time in range(ts.shape[1]-1):  #range(10):    range(3): #
 	else:
 		de=Kalman6d[:3,0]
 	KalmanQ = np.array([np.cos(mag/2),de[0]*np.sin(mag/2),de[1]*np.sin(mag/2),de[2]*np.sin(mag/2)])
+	#verify_quat(KalmanQ,'Kalman6d')
 	KalmanQ = KalmanQ*(1/np.linalg.norm(KalmanQ))
 
 	x_posteriori[:4]=quat_mult(x_prior[:4],KalmanQ)
@@ -549,6 +577,8 @@ print('plotting')
 
 #print(x_gyro_rad)
 
+
+
 plot_time = np.zeros([1,x_gyro_rad.shape[1]])
 plot_time_V = np.zeros([1,V_x_rad.shape[1]])
 for i in range(x_gyro_rad.shape[1]):
@@ -567,7 +597,7 @@ ax1.plot(plot_time_V,V_x_rad[0,:],label = 'Vicon')
 ax1.plot(plot_time,x_gyro_rad[2,:],label = 'Gyro')
 ax1.plot(plot_time,a_orientation[2,:],label = 'Accel')
 ax1.plot(plot_time,UKF_out[0,:],label = 'UKF')
-ax1.plot(plot_time,UKF_out[5,:],label = 'UKF rate?')
+#ax1.plot(plot_time,UKF_out[5,:],label = 'UKF rate?')
 
 plt.ylabel('angle, Radians')
 plt.legend(loc = 'lower right')
@@ -578,7 +608,7 @@ ax2.plot(plot_time_V,V_x_rad[1,:],label = 'Vicon')
 ax2.plot(plot_time,x_gyro_rad[1,:],label = 'Gyro')
 ax2.plot(plot_time,a_orientation[1,:],label = 'Accel')
 ax2.plot(plot_time,UKF_out[1,:],label = 'UKF')
-ax2.plot(plot_time,UKF_out[4,:],label = 'UKF rate?')
+#ax2.plot(plot_time,UKF_out[4,:],label = 'UKF rate?')
 
 plt.ylabel('angle, Radians')
 plt.legend(loc = 'lower right')
@@ -589,7 +619,7 @@ ax3.plot(plot_time_V,V_x_rad[2,:],label = 'Vicon')
 ax3.plot(plot_time,x_gyro_rad[0,:],label = 'Gyro')
 ax3.plot(plot_time,a_orientation[0,:],label = 'Accel')
 ax3.plot(plot_time,UKF_out[2,:],label = 'UKF')
-ax3.plot(plot_time,UKF_out[3,:],label = 'UKF rate?')
+#ax3.plot(plot_time,UKF_out[3,:],label = 'UKF rate?')
 plt.xlabel('time, s')
 plt.ylabel('angle, Radians')
 plt.legend(loc = 'lower right')
