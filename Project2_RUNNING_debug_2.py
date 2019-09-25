@@ -1,7 +1,9 @@
 from scipy import io
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.animation as manimation
 import numpy as np 
-
 
 def quat_mult(a,b):
 	
@@ -442,14 +444,14 @@ def MeasurementModel(State0):
 
 #TUNING PARAM
 #R=np.zeros((6,6)) #Measurement uncertainty covariance: idk what else to set this to rn
-Ra = 5. #accelerometer observation model noise
-Rg = 0.05#.04 # Gyro observation model noise <
+Ra = 200 #accelerometer observation model noise
+Rg = 200 #.04 # Gyro observation model noise <
 #^^ This parameter seems to play a big role in changing output values
 R = np.diag(np.concatenate([Ra*np.ones([1,3]),Rg*np.ones([1,3])],axis=None))
 
 #Q=np.zeros((6,6)) #ProcessModel uncertainty covariance: idk what else to set this to rn
-Qa = .0001#.5#100#.001#1   # Process model accel noise < 
-Qg = 0.01   # Process model gyro noise < 
+Qa = 200 #.5#100#.001#1   # Process model accel noise < 
+Qg = 150   # Process model gyro noise < 
 Q = np.diag(np.concatenate([Qa*np.ones([1,3]),Qg*np.ones([1,3])],axis=None))
 
 
