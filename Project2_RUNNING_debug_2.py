@@ -813,7 +813,7 @@ print('The dimensions of Rzyx_madg are: ' + str(Rzyx_madg.shape))
 
 # UKF data
 Rzyx_UKF = np.zeros(shape = (3, 3, UKF_out.shape[1]))
-for i in range(0, UKF_out.shape[2]):
+for i in range(0, Rzyx_UKF.shape[2]):
 	Rz_UKF = np.array([[np.cos(UKF_out[0, i]), -np.sin(UKF_out[0, i]), 0],
 		[np.sin(UKF_out[0, i]), np.cos(UKF_out[0, i]), 0],
 		[0, 0, 1]])
